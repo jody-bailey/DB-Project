@@ -1,0 +1,92 @@
+[
+    {
+        "name": "Arrow Electronics, Inc.",
+        "phone": "+1 (303) 824-4000",
+        "add_1": "9201 E. Dry Creek Rd.",
+        "add_2": "",
+        "city": "Centennial",
+        "state": "Colorado",
+        "zip": "80112",
+        "country": "United States"
+    },
+    {
+        "name": "Avnet",
+        "phone": "+1 (480) 643-2000",
+        "add_1": "2211 South 47th Street",
+        "add_2": "",
+        "city": "Phoenix",
+        "state": "Arizona",
+        "zip": "85034",
+        "country": "United States"
+    },
+    {
+        "name": "WPG Holdings LTD",
+        "phone": "+886 2-82261500",
+        "add_1": "18F., No.2, Jian 8th Rd.",
+        "add_2": "",
+        "city": "Zhonghe Dist.",
+        "state": "New Taipei City 235",
+        "zip": "23511",
+        "country": "Taiwan"
+    },
+    {
+        "name": "Digi-Key Electronics",
+        "phone": "+1 (800) 344-4539",
+        "add_1": "701 Brooks Avenue South",
+        "add_2": "",
+        "city": "Three River Falls",
+        "state": "Minnesota",
+        "zip": "56701",
+        "country": "United States"
+    },
+    {
+        "name": "TTI, Inc",
+        "phone": "+1 (800) 225-5884",
+        "add_1": "2441 Northeast Parkway",
+        "add_2": "",
+        "city": "Fort Worth",
+        "state": "Texas",
+        "zip": "76106-1816",
+        "country": "United States"
+    },
+    {
+        "name": "Allied Electronics & Automation",
+        "phone": "+1 (866) 433-5722",
+        "add_1": "7151 Jack Newell Blvd. S.",
+        "add_2": "",
+        "city": "Fort Worth",
+        "state": "Texas",
+        "zip": "76118",
+        "country": "United States"
+    },
+    {
+        "name": "Mouser Electronics",
+        "phone": "+1 (800) 346-6873",
+        "add_1": "1000 North Main St.",
+        "add_2": "",
+        "city": "Mansfield",
+        "state": "Texas",
+        "zip": "76063",
+        "country": "United States"
+    },
+    {
+        "name": "Smith",
+        "phone": "+86 21.6031.6600",
+        "add_1": "669 Xinzha Road",
+        "add_2": "Units 06-07, 38F",
+        "city": "Jing'an District",
+        "state": "",
+        "zip": "200041",
+        "country": "Shanghai"
+    },
+    {
+        "name": "Newark",
+        "phone": "+1 (800) 463-9275",
+        "add_1": "300 S. Riverside Plaza",
+        "add_2": "Suite 2200",
+        "city": "Chicago",
+        "state": "Illinois",
+        "zip": "60606",
+        "country": "United States"
+    }
+]

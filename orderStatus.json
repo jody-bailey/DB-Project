@@ -1,0 +1,26 @@
+[
+    {
+        "status": "Processing"
+    },
+    {
+        "status": "Awaiting Shipment"
+    },
+    {
+        "status": "Awaiting Pickup"
+    },
+    {
+        "status": "Completed"
+    },
+    {
+        "status": "Shipped"
+    },
+    {
+        "status": "Cancelled"
+    },
+    {
+        "status": "Declined"
+    },
+    {
+        "status": "Refunded"
+    }
+]
