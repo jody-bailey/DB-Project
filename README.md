@@ -1,8 +1,8 @@
-### CSC-411 Course Project
+# CSC-411 Course Project
 
 This project is for CSC-411 Databases at the University of Southern Mississippi.
 
-# How to run the application
+### How to run the application
 
 1. In a terminal/CMD prompt, navigate to where you would like the code stored.
 2. Enter command `git clone https://github.com/jody-bailey/DB-Project.git`
