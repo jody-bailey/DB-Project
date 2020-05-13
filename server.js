@@ -33,7 +33,6 @@ app.get("/", (req, res) => {
         allCategories = rows;
         allCategories.sort();
         req.app.locals.categories = allCategories;
-        console.log("All categories done.");
       } catch (error) {
         console.log(error);
       }
@@ -129,7 +128,6 @@ app.get("/products/categories", (req, res) => {
   req.app.locals.categories = allCategories;
   let categoryName = req.query.name;
   req.app.locals.selectedCategory = categoryName;
-  console.log(categoryName);
   (async () => {
     try {
       let page = parseInt(req.query.page) || 1;
@@ -455,7 +453,6 @@ const seedVendorProducts = async () => {
         .promise()
         .query("SELECT * FROM vendors");
       let vendors = rows1;
-      // console.log(vendors);
       const [rows2, fields2] = await pool
         .promise()
         .query("SELECT * FROM products");
@@ -502,7 +499,6 @@ const seedStoreProducts = async () => {
         .promise()
         .query("SELECT * FROM stores");
       let stores = rows1;
-      // console.log(vendors);
       const [rows2, fields2] = await pool
         .promise()
         .query("SELECT * FROM products");
@@ -529,9 +525,22 @@ const seedStoreProducts = async () => {
 };
 
 const seedCustomerOrders = async () => {
+    (async () => {
+        try {
+          const [rows, fields] = await pool
+            .promise()
+            .query("SELECT * FROM customer_order_products");
+          if (rows.length > 0) {
+            console.log("Customer order products data already exists.");
+            return;
+          }
+        } catch (error) {
+          console.log(error.message);
+        }
+      })();
   (async () => {
     try {
-      const [customers, fiels1] = await pool
+      const [customers, fields1] = await pool
         .promise()
         .query("SELECT * FROM customers");
       const [products, fields2] = await pool
@@ -553,30 +562,33 @@ const seedCustomerOrders = async () => {
           let randomStore = stores[Math.floor(Math.random() * stores.length)];
           let randomStatus =
             statuses[Math.floor(Math.random() * statuses.length)];
-          const result = await pool
-            .promise()
-            .query(
-              "INSERT IGNORE INTO customer_orders (customer_id, store_id, order_date, status_id) values (?, ?, (SELECT NOW() - INTERVAL FLOOR(RAND() * 14) DAY), ?)",
-              [
-                customer.customer_id,
-                randomStore.store_id,
-                randomStatus.status_id,
-              ]
-            );
-          let orderId = result.insertId;
-          randomProducts.forEach(async function (prod) {
-            let quantity = Math.floor(Math.random() * 5) + 1;
-            await pool
-              .promise()
-              .query(
-                "INSERT IGNORE INTO customer_order_products (order_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
-                [orderId, prod.upc, quantity, prod.price]
-              );
-          });
+          pool.query(
+            "INSERT IGNORE INTO customer_orders (customer_id, store_id, order_date, status_id) values (?, ?, (SELECT NOW() - INTERVAL FLOOR(RAND() * 14) DAY), ?)",
+            [
+              customer.customer_id,
+              randomStore.store_id,
+              randomStatus.status_id,
+            ],
+            function (err, result) {
+              if (err) throw err;
+              randomProducts.forEach(async function (prod) {
+                let quantity = Math.floor(Math.random() * 5) + 1;
+
+                // Need to verify the store has the quantity ordered and deduct this quantity from the inventory
+                pool.query(
+                  "INSERT IGNORE INTO customer_order_products (order_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
+                  [result.insertId, prod.upc, quantity, prod.price],
+                  function(err, result) {
+                      if (err) throw err;
+                  }
+                );
+              });
+            }
+          );
         }
       });
     } catch (error) {
-        console.log(error.message);
+      console.log(error.message);
     }
   })();
 };
