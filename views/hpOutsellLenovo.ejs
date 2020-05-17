@@ -1,0 +1,35 @@
+<%- include("header") -%> <%- include("queriesHeader") -%>
+<h2 class="my-5">Number of stores where HP outsold Lenovo (Laptops)</h2>
+
+<div class="input-group my-5">
+  <div class="input-group-prepend">
+    <span class="input-group-text" id="inputGroup-sizing-default"><strong>Number of stores that sold more HP laptops</strong></span>
+  </div>
+  <input
+    type="text"
+    class="form-control"
+    aria-label="Default"
+    aria-describedby="inputGroup-sizing-default"
+    disabled
+    value="<%= totalStores %>"
+  />
+</div>
+<!-- <h5>Number of stores that sold more HP laptops: <%= totalStores %></h5> -->
+<table class="table">
+  <tr>
+    <th scope="col">Store Id</th>
+    <th scope="col">HP Sales</th>
+    <th scope="col">Lenovo Sales</th>
+    <th scope="col">Winner</th>
+  </tr>
+  <% sales.forEach(function(sale) { %>
+  <tr>
+    <th scope="row"><%= sale.storeId %></th>
+    <td><%= sale.HP %></td>
+    <td><%= sale.Lenovo %></td>
+    <td><%= sale.winner %></td>
+  </tr>
+  <% }) %>
+</table>
+
+<%- include("footer") -%>

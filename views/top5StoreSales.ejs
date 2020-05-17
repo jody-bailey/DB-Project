@@ -1,0 +1,20 @@
+<%- include("header") -%>
+<%- include("queriesHeader") -%>
+<h2 class="my-5">Top 5 Store Sales</h2>
+
+<table class="table">
+    <tr>
+        <th scope="col">Rank</th>
+        <th scope="col">Store Id</th>
+        <th scope="col">Number of Sales</th>
+    </tr>
+    <% products.forEach((product, index, array) => { %>
+        <tr>
+            <th scope="row"><%= index + 1 %></th>
+            <td><%= product.store_id %></td>
+            <td><%= product.numSales %></td>
+        </tr>
+    <% }) %>
+</table>
+
+<%- include("footer") -%>

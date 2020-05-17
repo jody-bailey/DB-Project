@@ -1,0 +1,18 @@
+<%- include("header") -%>
+<%- include("queriesHeader") -%>
+<h2 class="my-5">Top 3 Categories</h2>
+
+<table class="table">
+    <tr>
+        <th scope="col">Category Name</th>
+        <th scope="col">Number of Sales</th>
+    </tr>
+    <% categories.forEach(function(category) { %>
+        <tr>
+            <th scope="row"><%= category.name %></th>
+            <td><%= category.totalSold %></td>
+        </tr>
+    <% }) %>
+</table>
+
+<%- include("footer") -%>

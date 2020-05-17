@@ -1,9 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const mysql = require("mysql2");
 const bodyParser = require("body-parser");
+const mysql = require("mysql");
+const mysql2 = require("mysql2");
+const util = require("util");
 const fs = require("fs");
-
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -13,37 +14,48 @@ app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static("public"));
 
-var pool = mysql.createPool({
-  connectionLimit: 10,
+const pool = mysql2.createPool({
   host: "localhost",
   user: process.env.MYSQL_USER,
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
 });
 
-let allCategories = [];
+config = {
+  host: "localhost",
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+};
 
-app.get("/", (req, res) => {
-  if (allCategories.length === 0) {
-    (async () => {
-      try {
-        const [rows, fields] = await pool
-          .promise()
-          .query("SELECT name FROM categories");
-        allCategories = rows;
-        allCategories.sort();
-        req.app.locals.categories = allCategories;
-      } catch (error) {
-        console.log(error);
-      }
-    })().then(() => {
-      res.render("home", { categories: allCategories });
-    });
-  } else {
-    res.render("home", { categories: allCategories });
+function makeDb(config) {
+  const connection = mysql.createConnection(config);
+  return {
+    query(sql, args) {
+      return util.promisify(connection.query).call(connection, sql, args);
+    },
+    close() {
+      return util.promisify(connection.end).call(connection);
+    },
+  };
+}
+
+const db = makeDb(config);
+
+const randNumArray = (count, max) => {
+  let numArray = [];
+  for (var i = 0; i < count; i++) {
+    numArray.push(Math.floor(Math.random() * max));
   }
+  return numArray;
+};
+
+// HOME ROUTE
+app.get("/", (req, res) => {
+  res.render("home", { success: null, message: null });
 });
 
+// USE THIS ROUTE TO SEED THE DATABASE WITH THE PROVIDED DATA
 app.get("/seeddb", async (req, res) => {
   (async () => {
     await seedProducts();
@@ -56,144 +68,273 @@ app.get("/seeddb", async (req, res) => {
     await seedCustomerOrders();
   })()
     .then(() => {
-      res.send({ message: "success" });
+      res.render("home", {
+        success: true,
+        message: "Successfully seeded the database.",
+      });
     })
     .catch((err) => {
       console.log(err);
-      res.send({ message: "failed" });
+      res.render("home", {
+        success: false,
+        message: "Failed to seed the database.",
+      });
     });
 });
 
-app.get("/shop", async (req, res) => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      res.render("shop", { products: rows });
-    } catch (error) {
-      res.render("error");
-    }
-  })();
+// RENDERS THE "QUERIES" PAGE
+app.get("/queries", async (req, res) => {
+  res.render("queries");
 });
 
-// app.get("/products", (req, res) => {
-//     res.redirect("/products/1");
-// });
-
-app.get("/products", async (req, res) => {
-  req.app.locals.categories = allCategories;
-  (async () => {
-    try {
-      let pagination = [];
-      const page = parseInt(req.query.page) || 1;
-      const resultsPerPage = 15;
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      let pages = chunkArray(rows, resultsPerPage);
-      let lowerBound = 1;
-      let upperBound = 10;
-
-      if (page < 1) {
-        page = 1;
-      } else if (page > pages.length) {
-        page = page.length;
-      }
-      if (page > 6) {
-        lowerBound = page - 5;
-        upperBound = page + 4;
-        if (upperBound > pages.length - 5) {
-          lowerBound = pages.length - 9;
-          upperBound = pages.length;
-        }
-      } else {
-        lowerBound = 1;
-        upperBound = 10;
-      }
-      res.render("products", {
-        products: pages[page - 1],
-        pages: pages,
-        lowerBound: lowerBound,
-        upperBound: upperBound,
-        lastPage: pages.length - 1,
-      });
-    } catch (error) {
-      console.log(error.message);
-    }
-  })();
+// EXECUTES AND RETURNS THE TOP 20 PRODUCTS FROM EACH STORE QUERY
+app.get("/queries/top-20-products-by-store", (req, res) => {
+  getTopProductsByStore(req, res);
 });
 
-app.get("/products/categories", (req, res) => {
-  req.app.locals.categories = allCategories;
-  let categoryName = req.query.name;
-  req.app.locals.selectedCategory = categoryName;
-  (async () => {
-    try {
-      let page = parseInt(req.query.page) || 1;
-      const resultsPerPage = 15;
-      const [
-        rows,
-        fields,
-      ] = await pool
-        .promise()
-        .query(
-          "SELECT p.* FROM products p JOIN product_categories pc ON pc.upc = p.upc JOIN categories c ON c.category_id = pc.category_id WHERE c.name = ?",
-          [categoryName]
-        );
-      let pages = chunkArray(rows, resultsPerPage);
-      let lowerBound = 1;
-      let upperBound = 10;
-
-      if (page < 1) {
-        page = 1;
-      } else if (page > pages.length) {
-        page = page.length;
-      }
-      if (page > 6) {
-        lowerBound = page - 5;
-        upperBound = page + 4;
-        if (upperBound > pages.length - 5) {
-          lowerBound = pages.length - 9;
-          upperBound = pages.length;
-        }
-      } else {
-        lowerBound = 1;
-        upperBound = 10;
-      }
-      if (pages.length < 10) {
-        lowerBound = 1;
-        upperBound = pages.length;
-      }
-      res.render("products", {
-        products: pages[page - 1],
-        pages: pages,
-        lowerBound: lowerBound,
-        upperBound: upperBound,
-        lastPage: pages.length,
-      });
-    } catch (error) {
-      console.log(`From /products/categories: ${error.message}`);
-    }
-  })();
+// EXECUTES AND RETURNS THE TOP 20 PRODUCTS BY STATE QUERY
+app.get("/queries/top-20-products-by-state", (req, res) => {
+  getTopProductsByState(req, res);
 });
 
-app.get("/query/:name", (req, res) => {
-  pool.query(`SELECT * FROM ${req.params.name}`, function (
-    error,
-    results,
-    fields
-  ) {
-    if (error) return error;
-    res.send(results);
-  });
+// EXECUTES AND RETURNS THE TOP 5 STORES BY SALES
+app.get("/queries/top-5-stores", (req, res) => {
+  getTop5Stores(req, res);
 });
 
+// EXECUTES AND RETURNS THE NUMBER OF STORES HP OUTSELLS LENOVO
+app.get("/queries/hp-outsell-lenovo", (req, res) => {
+  hpOutsellLevnovo(req, res);
+});
+
+// EXECUTES AND RETURNS THE TOP 3 CATEGORIES QUERY
+app.get("/queries/top-3-categories", (req, res) => {
+  getTopThreeCategories(req, res);
+});
+
+// STARTS THE SERVER
 app.listen(PORT, () => {
   console.log(`App is listening on port ${PORT}`);
 });
 
-// Functions
+// DATABASE ACCESS - NORMALLY WOULD MODULATE THIS BUT DON'T HAVE TIME
+
+// METHOD I FOUND ON STACKOVERFLOW TO SHUFFLE AN ARRAY. USED TO GENERATE SOME RANDOMNESS.
+function shuffle(array) {
+  var currentIndex = array.length,
+    temporaryValue,
+    randomIndex;
+
+  while (0 !== currentIndex) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+
+  return array;
+}
+
+// GETS THE STORE IDs FROM THE STORES TABLE
+const getStoreIds = async () => {
+  try {
+    const result = await db.query("SELECT store_id FROM stores");
+    return result;
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+// GETS THE STATES THAT HAVE STORES RESIDING IN THEM
+const getStoreStates = async () => {
+  const result = await db.query("SELECT distinct state FROM stores");
+
+  return result;
+};
+
+// GETS THE TOP 20 PRODUCTS BY STORE
+async function getTopProductsByStore(req, res) {
+  try {
+    let storeIds = await getStoreIds();
+    let results = await asyncStoreProducts(storeIds);
+    res.render("top20perStore", {
+      products: results,
+      numResults: results.length,
+    });
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// HELPER FOR THE ABOVE FUNCTION
+const asyncStoreProducts = async (storeIds) => {
+  let topProducts = [];
+  for (const store of storeIds) {
+    const result = await db.query(
+      `select co.store_id, cop.upc, p.name, sum(quantity) as totalSold
+        from customer_orders co
+        join customer_order_products cop
+          on cop.order_id = co.order_id
+        join products p
+          on p.upc = cop.upc
+        where co.store_id = ?
+        group by cop.upc, p.name
+        order by co.store_id, sum(quantity) desc
+        limit 20;`,
+      store.store_id
+    );
+    for (const res of result) {
+      topProducts.push(res);
+    }
+  }
+
+  return topProducts;
+};
+
+// GET THE TOP PRODUCTS BY STATE
+const getTopProductsByState = async (req, res) => {
+  let topProducts = [];
+
+  try {
+    const states = await getStoreStates();
+    const products = await getStoreProductsByState(states);
+
+    res.render("top20byState", {
+      products: products,
+      numResults: products.length,
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+// GETS PRODUCTS BY STATE
+const getStoreProductsByState = async (states) => {
+  let topProducts = [];
+  for (const state of states) {
+    const result = await db.query(
+      `select s.state, co.store_id, cop.upc, p.name, sum(quantity) as totalSold
+        from stores s 
+        join customer_orders co
+          on s.store_id = co.store_id
+        join customer_order_products cop
+          on cop.order_id = co.order_id
+        join products p
+          on p.upc = cop.upc
+        where s.state = ?
+        group by s.state, co.store_id, cop.upc, p.name
+        order by sum(quantity) desc
+        limit 20;`,
+      state.state
+    );
+
+    for (const res of result) {
+      topProducts.push(res);
+    }
+  }
+  return topProducts;
+};
+
+// GETS THE TOP 5 STORES BASED ON SALES
+const getTop5Stores = async (req, res) => {
+  let topStores = [];
+
+  const result = await db.query(
+    `select store_id, count(*) as numSales
+  from customer_orders
+  where year(order_date) = year(current_date())
+  group by store_id
+  order by count(*) desc
+  LIMIT 5;`
+  );
+
+  for (const res of result) {
+    topStores.push(res);
+  }
+
+  res.render("top5StoreSales", { products: topStores });
+};
+
+// GET THE NUMBER OF STORES THAT HP OUTSELLS LENOVO
+const hpOutsellLevnovo = async (req, res) => {
+  try {
+    let winners = [];
+    const result = await db.query(`select s.store_id, sum(hp.totalSold) as hpSales, sum(lenovo.totalSold) as lenovoSales
+    from stores s 
+    join (select co.store_id as store_id, 
+        cop.quantity as totalSold
+        from customer_order_products cop
+        join customer_orders co
+          on co.order_id = cop.order_id
+        join product_categories pc
+          on pc.upc = cop.upc
+        join categories c
+          on c.category_id = pc.category_id
+        join products p 
+          on p.upc = cop.upc
+        where c.name = 'Laptops'
+        and p.brand = 'HP') as hp
+        on hp.store_id = s.store_id
+    join (select co.store_id as store_id, 
+        cop.quantity as totalSold
+        from customer_order_products cop
+        join customer_orders co
+          on co.order_id = cop.order_id
+        join product_categories pc
+          on pc.upc = cop.upc
+        join categories c
+          on c.category_id = pc.category_id
+        join products p 
+          on p.upc = cop.upc
+        where c.name = 'Laptops'
+        and p.brand = 'Lenovo') as lenovo
+        on lenovo.store_id = s.store_id
+    group by s.store_id
+    order by s.store_id;`);
+
+    for (const res of result) {
+      winners.push({
+        storeId: res.store_id,
+        HP: res.hpSales,
+        Lenovo: res.lenovoSales,
+        winner: res.hpSales > res.lenovoSales ? "HP" : "Lenovo",
+      });
+    }
+
+    let countHP = winners.filter((el) => el.winner === "HP");
+
+    res.render("hpOutsellLenovo", {
+      sales: winners,
+      totalStores: countHP.length,
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+// GETS THE TOP 3 CATEGORIES
+const getTopThreeCategories = async (req, res) => {
+  try {
+    const result = await db.query(`select c.name, sum(quantity) as totalSold
+    from customer_order_products cop
+    join product_categories pc
+      on pc.upc = cop.upc
+    join categories c
+      on c.category_id = pc.category_id
+    where c.name <> 'Best Buy'
+    group by c.name
+    order by sum(quantity) desc
+    limit 3;`);
+
+    res.render("topThreeCategories", { categories: result });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+// Seed Functions
 const seedProducts = async () => {
   (async () => {
     try {
@@ -525,19 +666,19 @@ const seedStoreProducts = async () => {
 };
 
 const seedCustomerOrders = async () => {
-    (async () => {
-        try {
-          const [rows, fields] = await pool
-            .promise()
-            .query("SELECT * FROM customer_order_products");
-          if (rows.length > 0) {
-            console.log("Customer order products data already exists.");
-            return;
-          }
-        } catch (error) {
-          console.log(error.message);
-        }
-      })();
+  (async () => {
+    try {
+      const [rows, fields] = await pool
+        .promise()
+        .query("SELECT * FROM customer_order_products");
+      if (rows.length > 0) {
+        console.log("Customer order products data already exists.");
+        return;
+      }
+    } catch (error) {
+      console.log(error.message);
+    }
+  })();
   (async () => {
     try {
       const [customers, fields1] = await pool
@@ -578,8 +719,8 @@ const seedCustomerOrders = async () => {
                 pool.query(
                   "INSERT IGNORE INTO customer_order_products (order_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
                   [result.insertId, prod.upc, quantity, prod.price],
-                  function(err, result) {
-                      if (err) throw err;
+                  function (err, result) {
+                    if (err) throw err;
                   }
                 );
               });
@@ -592,41 +733,3 @@ const seedCustomerOrders = async () => {
     }
   })();
 };
-
-const randNumArray = (count, max) => {
-  let numArray = [];
-  for (var i = 0; i < count; i++) {
-    numArray.push(Math.floor(Math.random() * max));
-  }
-  return numArray;
-};
-
-function shuffle(array) {
-  var currentIndex = array.length,
-    temporaryValue,
-    randomIndex;
-
-  while (0 !== currentIndex) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex -= 1;
-
-    temporaryValue = array[currentIndex];
-    array[currentIndex] = array[randomIndex];
-    array[randomIndex] = temporaryValue;
-  }
-
-  return array;
-}
-
-function chunkArray(myArray, chunk_size) {
-  var arrayLength = myArray.length;
-  var tempArray = [];
-
-  for (index = 0; index < arrayLength; index += chunk_size) {
-    myChunk = myArray.slice(index, index + chunk_size);
-    // Do something if you want with the group
-    tempArray.push(myChunk);
-  }
-
-  return tempArray;
-}

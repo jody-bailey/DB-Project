@@ -1,0 +1,34 @@
+<%- include("header") -%>
+<%- include("queriesHeader") -%>
+<h2 class="my-5">Top 20 Products Per Store</h2>
+<div class="input-group my-5">
+    <div class="input-group-prepend">
+      <span class="input-group-text" id="inputGroup-sizing-default"><strong>Number of results</strong></span>
+    </div>
+    <input
+      type="text"
+      class="form-control"
+      aria-label="Default"
+      aria-describedby="inputGroup-sizing-default"
+      disabled
+      value="<%= numResults %>"
+    />
+  </div>
+<table class="table">
+    <tr>
+        <th scope="col">Store Id</th>
+        <th scope="col">UPC</th>
+        <th scope="col">Product Name</th>
+        <th scope="col">Total Sold</th>
+    </tr>
+    <% products.forEach(function(product) { %>
+        <tr>
+            <th scope="row"><%= product.store_id %></th>
+            <td><%= product.upc %></td>
+            <td><%= product.name %></td>
+            <td><%= product.totalSold %></td>
+        </tr>
+    <% }) %>
+</table>
+
+<%- include("footer") -%>
