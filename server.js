@@ -604,14 +604,9 @@ const seedVendorProducts = async () => {
         let price = product.price * 0.9;
         let numVendors = Math.floor(1 + Math.random() * 3);
         vendors = shuffle(vendors);
-        for (var i = 0; i < numVendors; i++) {
-          let vendorId = vendors[i].vendor_id;
-          await pool
-            .promise()
-            .query(
-              "INSERT IGNORE INTO vendor_products (vendor_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
-              [vendorId, upc, quantity, price]
-            );
+        for (const vend of vendors) {
+          await db.query("INSERT IGNORE INTO vendor_products (vendor_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
+          [vend.vendor_id, upc, quantity, price]);
         }
       });
     } catch (error) {
@@ -636,29 +631,19 @@ const seedStoreProducts = async () => {
   })();
   (async () => {
     try {
-      const [rows1, fields1] = await pool
-        .promise()
-        .query("SELECT * FROM stores");
-      let stores = rows1;
-      const [rows2, fields2] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      let products = rows2;
-      stores.forEach(async (store) => {
+      let stores = await db.query("SELECT * FROM stores");
+      let products = await db.query("SELECT * FROM products");
+      for (const store of stores) {
         let storeId = store.store_id;
         let numProducts = Math.floor(Math.random() * 200) + 400;
         products = shuffle(products);
-        for (var i = 0; i < numProducts; i++) {
-          let upc = products[i].upc;
+        for (const prod of products) {
+          let upc = prod.upc;
           let quantity = Math.floor(Math.random() * 25);
-          await pool
-            .promise()
-            .query(
-              "INSERT IGNORE INTO store_products (store_id, upc, quantity) VALUES (?, ?, ?)",
-              [storeId, upc, quantity]
-            );
+          await db.query("INSERT IGNORE INTO store_products (store_id, upc, quantity) VALUES (?, ?, ?)",
+          [storeId, upc, quantity]);
         }
-      });
+      }
     } catch (error) {
       console.log(error.message);
     }
