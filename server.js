@@ -7,6 +7,8 @@ const util = require("util");
 const fs = require("fs");
 const PORT = process.env.PORT || 3000;
 
+const readFile = util.promisify(fs.readFile);
+
 const app = express();
 
 app.set("view engine", "ejs");
@@ -57,7 +59,7 @@ app.get("/", (req, res) => {
 
 // USE THIS ROUTE TO SEED THE DATABASE WITH THE PROVIDED DATA
 app.get("/seeddb", async (req, res) => {
-  (async () => {
+  try {
     await seedProducts();
     await seedStores();
     await seedVendors();
@@ -66,20 +68,17 @@ app.get("/seeddb", async (req, res) => {
     await seedVendorProducts();
     await seedStoreProducts();
     await seedCustomerOrders();
-  })()
-    .then(() => {
-      res.render("home", {
-        success: true,
-        message: "Successfully seeded the database.",
-      });
-    })
-    .catch((err) => {
-      console.log(err);
-      res.render("home", {
-        success: false,
-        message: "Failed to seed the database.",
-      });
+    res.render("home", {
+      success: true,
+      message: "Successfully seeded the database.",
     });
+  } catch (error) {
+    console.log(error.message);
+    res.render("home", {
+      success: false,
+      message: "Failed to seed the database.",
+    });
+  }
 });
 
 // RENDERS THE "QUERIES" PAGE
@@ -143,7 +142,7 @@ const getStoreIds = async () => {
     const result = await db.query("SELECT store_id FROM stores");
     return result;
   } catch (error) {
-    console.log(error);
+    console.log(error.message);
   }
 };
 
@@ -164,7 +163,7 @@ async function getTopProductsByStore(req, res) {
       numResults: results.length,
     });
   } catch (error) {
-    console.log(error);
+    console.log(error.message);
   }
 }
 
@@ -206,7 +205,7 @@ const getTopProductsByState = async (req, res) => {
       numResults: products.length,
     });
   } catch (error) {
-    console.log(error);
+    console.log(error.message);
   }
 };
 
@@ -310,7 +309,7 @@ const hpOutsellLevnovo = async (req, res) => {
       totalStores: countHP.length,
     });
   } catch (error) {
-    console.log(error);
+    console.log(error.message);
   }
 };
 
@@ -330,30 +329,25 @@ const getTopThreeCategories = async (req, res) => {
 
     res.render("topThreeCategories", { categories: result });
   } catch (error) {
-    console.log(error);
+    console.log(error.message);
   }
 };
 
 // Seed Functions
 const seedProducts = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      if (rows.length > 0) {
-        console.log("Product data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from products");
+    if (result.length > 0) {
+      console.log("Products already exist.");
+      return;
     }
-  })();
-  fs.readFile("./products.json", async (err, data) => {
-    if (err) throw err;
+    const data = await readFile('./products.json');
     let products = JSON.parse(data);
-    (async () => {
-      products.forEach(async (product) => {
+    let insertProducts = [];
+    let insertItems = [];
+    let insertCategories = [];
+    let insertProductCategories = [];
+      for (const product of products) {
         let upc = product.upc;
         let name = product.name;
         let description = product.shortDescription;
@@ -361,108 +355,111 @@ const seedProducts = async () => {
         let price = product.regularPrice;
         let includedItems = product.includedItemList;
         let categories = product.categoryPath;
-        (async () => {
-          try {
-            await pool
-              .promise()
-              .query(
-                "INSERT IGNORE INTO products (upc, name, description, brand, price) VALUES (?, ?, ?, ?, ?)",
-                [upc, name, description, brand, price]
-              );
-            includedItems.forEach(async (item) => {
-              await pool
-                .promise()
-                .query(
-                  "INSERT IGNORE INTO included_items (upc, item_name) VALUES (?, ?)",
-                  [upc, item.includedItem]
-                );
-            });
 
-            categories.forEach(async (cat) => {
-              await pool
-                .promise()
-                .query("INSERT IGNORE INTO categories (name) VALUES (?)", [
-                  cat.name,
-                ]);
-              await pool
-                .promise()
-                .query(
-                  "INSERT IGNORE INTO product_categories (upc, category_id) VALUES (?, (SELECT category_id FROM categories WHERE name = ?))",
-                  [upc, cat.name]
-                );
-            });
-          } catch (error) {
-            console.log(error.message);
-          }
-        })();
-      });
-    })();
-  });
+        insertProducts.push([
+          upc, name, description, brand, price
+        ]);
+
+        for (const item of includedItems) {
+          insertItems.push([
+            upc, item.includedItem
+          ]);
+        }
+
+        for (const cat of categories) {
+          insertCategories.push([
+            cat.name
+          ]);
+          insertProductCategories.push([
+            upc, cat.name
+          ]);
+        }
+        
+        // await db.query(
+        //   "INSERT IGNORE INTO products (upc, name, description, brand, price) VALUES (?, ?, ?, ?, ?)",
+        //   [upc, name, description, brand, price]
+        // );
+
+        // for (const item of includedItems) {
+        //   await db.query(
+        //     "INSERT IGNORE INTO included_items (upc, item_name) VALUES (?, ?)",
+        //     [upc, item.includedItem]
+        //   );
+        // }
+
+        // for (const cat of categories) {
+        //   await db.query("INSERT IGNORE INTO categories (name) VALUES (?)", [
+        //     cat.name,
+        //   ]);
+        //   await db.query(
+        //     "INSERT IGNORE INTO product_categories (upc, category_id) VALUES (?, (SELECT category_id FROM categories WHERE name = ?))",
+        //     [upc, cat.name]
+        //   );
+        // }
+      }
+      await db.query("INSERT IGNORE INTO products (upc, name, description, brand, price) VALUES ?",
+      [insertProducts]);
+      await db.query("INSERT IGNORE INTO included_items (upc, item_name) VALUES ?",
+      [insertItems]);
+      await db.query("INSERT IGNORE INTO categories (name) VALUES ?",
+      [insertCategories]);
+      let finalCategories = [];
+      for await (const cat of insertProductCategories) {
+        let result = await db.query('select category_id from categories where name = ?', [cat[1]]);
+        finalCategories.push([
+          cat[0], result[0].category_id
+        ]);
+      }
+      await db.query("INSERT IGNORE INTO product_categories (upc, category_id) VALUES ?",
+      [finalCategories]);
+      console.log('done with products')
+  } catch (error) {
+    throw error;
+  }
 };
 
 const seedStores = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool.promise().query("SELECT * FROM stores");
-      if (rows.length > 0) {
-        console.log("Store data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from stores");
+    if (result.length > 0) {
+      console.log("Stores already exist.");
+      return;
     }
-  })();
-  fs.readFile("./stores.json", async (err, data) => {
-    if (err) throw err;
+    const data = await readFile("./stores.json");
     let stores = JSON.parse(data);
-    (async () => {
-      stores.forEach(async (store) => {
+    let insertStores = [];
+      for (const store of stores) {
         let add_1 = store.address;
         let add_2 = store.address2;
         let city = store.city;
         let state = store.region;
         let zip = store.fullPostalCode;
         let country = store.country;
-        let name = store.name;
         let phone = store.phone;
         let storeId = store.storeId;
 
-        (async () => {
-          try {
-            await pool
-              .promise()
-              .query(
-                "INSERT IGNORE INTO stores (store_id, phone, add_1, add_2, city, state, zip, country, hrs_open, hrs_close) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '09:00:00', '22:00:00')",
-                [storeId, phone, add_1, add_2, city, state, zip, country]
-              );
-          } catch (error) {
-            console.log(error.message);
-          }
-        })();
-      });
-    })();
-  });
+        insertStores.push([
+          storeId, phone, add_1, add_2, city, state, zip, country, '09:00:00', '22:00:00'
+        ]);
+      }
+      await db.query("INSERT IGNORE INTO stores (store_id, phone, add_1, add_2, city, state, zip, country, hrs_open, hrs_close) VALUES ?",
+      [insertStores])
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedVendors = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM vendors");
-      if (rows.length > 0) {
-        console.log("Vendor data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from vendors");
+    if (result.length > 0) {
+      console.log("Vendors already exist");
+      return;
     }
-  })();
-  fs.readFile("./vendors.json", async (err, data) => {
-    if (err) throw err;
+    const data = await readFile("./vendors.json");
     let vendors = JSON.parse(data);
-    (async () => {
-      vendors.forEach(async (vendor) => {
+    let insertVendors = [];
+      for (const vendor of vendors) {
         let name = vendor.name;
         let phone = vendor.phone;
         let add_1 = vendor.add_1;
@@ -472,40 +469,31 @@ const seedVendors = async () => {
         let zip = vendor.zip;
         let country = vendor.country;
 
-        try {
-          await pool
-            .promise()
-            .query(
-              "INSERT IGNORE INTO vendors (name, phone, add_1, add_2, city, state, zip, country) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-              [name, phone, add_1, add_2, city, state, zip, country]
-            );
-        } catch (error) {
-          console.log(error.message);
-        }
-      });
-    })();
-  });
+        insertVendors.push([
+          name, phone, add_1, add_2, city, state, zip, country
+        ]);
+        
+      }
+      await db.query(
+        "INSERT IGNORE INTO vendors (name, phone, add_1, add_2, city, state, zip, country) VALUES ?",
+        [insertVendors]
+      );
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedCustomers = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM customers");
-      if (rows.length > 0) {
-        console.log("Customer data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from customers");
+    if (result.length > 0) {
+      console.log("Customers already exist");
+      return;
     }
-  })();
-  fs.readFile("./customers.json", async (err, data) => {
-    if (err) throw err;
+    const data = await readFile("./customers.json");
     let customers = JSON.parse(data);
-    (async () => {
-      customers.forEach(async (customer) => {
+    let insertCustomers = [];
+      for (const customer of customers) {
         let firstName = customer.first_name;
         let lastName = customer.last_name;
         let email = customer.email;
@@ -517,204 +505,162 @@ const seedCustomers = async () => {
         let zip = customer.zip;
         let country = customer.country;
 
-        try {
-          await pool
-            .promise()
-            .query(
-              "INSERT IGNORE INTO customers (first_name, last_name, email, phone, add_1, add_2, city, state, zip, country) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              [
-                firstName,
-                lastName,
-                email,
-                phone,
-                add_1,
-                add_2,
-                city,
-                state,
-                zip,
-                country,
-              ]
-            );
-        } catch (error) {
-          console.log(error.message);
-        }
-      });
-    })();
-  });
+        insertCustomers.push([
+          firstName, lastName, email, phone, add_1, add_2, city, state, zip, country
+        ])
+        
+      }
+      await db.query(
+        "INSERT IGNORE INTO customers (first_name, last_name, email, phone, add_1, add_2, city, state, zip, country) VALUES ?",
+        [
+          insertCustomers
+        ]
+      );
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedStatusId = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM order_status");
-      if (rows.length > 0) {
-        console.log("Order status data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from order_status");
+    if (result.length > 0) {
+      console.log("Order statuses already exist.");
+      return;
     }
-  })();
-  fs.readFile("./orderStatus.json", async (err, data) => {
-    if (err) throw err;
+    const data = await readFile("./orderStatus.json");
     let statuses = JSON.parse(data);
-    statuses.forEach(async (entry) => {
-      let name = entry.status;
+    let insertStatus = [];
+      for (const entry of statuses) {
+        let name = entry.status;
 
-      try {
-        await pool
-          .promise()
-          .query("INSERT IGNORE INTO order_status (status) VALUES (?)", [name]);
-      } catch (error) {
-        console.log(error.message);
+        insertStatus.push([
+          name
+        ]);
+        
       }
-    });
-  });
+      await db.query("INSERT IGNORE INTO order_status (status) VALUES ?", [
+        insertStatus
+      ]);
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedVendorProducts = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM vendor_products");
-      if (rows.length > 0) {
-        console.log("Vendor product data already exists.");
-        return;
+  try {
+    const result = await db.query("select * from vendor_products");
+    if (result.length > 0) {
+      console.log("Vendor products already exist.");
+      return;
+    }
+
+    let vendors = await db.query("select * from vendors");
+    let products = await db.query("select * from products");
+
+    let insertVendorProducts = [];
+
+    for (const product of products) {
+      let upc = product.upc;
+      let quantity = Math.floor(Math.random() * 500);
+      let price = product.price * 0.9;
+      vendors = shuffle(vendors);
+
+      for (const vend of vendors) {
+        insertVendorProducts.push([
+          vend.vendor_id, upc, quantity, price
+        ]);
+        
       }
-    } catch (error) {
-      console.log(error.message);
     }
-  })();
-  (async () => {
-    try {
-      const [rows1, fields1] = await pool
-        .promise()
-        .query("SELECT * FROM vendors");
-      let vendors = rows1;
-      const [rows2, fields2] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      let products = shuffle(rows2);
-      products.forEach(async (product) => {
-        let upc = product.upc;
-        let quantity = Math.floor(Math.random() * 500);
-        let price = product.price * 0.9;
-        let numVendors = Math.floor(1 + Math.random() * 3);
-        vendors = shuffle(vendors);
-        for (const vend of vendors) {
-          await db.query("INSERT IGNORE INTO vendor_products (vendor_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
-          [vend.vendor_id, upc, quantity, price]);
-        }
-      });
-    } catch (error) {
-      console.log(error.message);
-    }
-  })();
+    await db.query(
+      "INSERT IGNORE INTO vendor_products (vendor_id, upc, quantity, price) VALUES ?",
+      [insertVendorProducts]
+    );
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedStoreProducts = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM store_products");
-      if (rows.length > 0) {
-        console.log("Store products data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from store_products");
+    if (result.length > 0) {
+      console.log("Store products already exist.");
+      return;
     }
-  })();
-  (async () => {
-    try {
-      let stores = await db.query("SELECT * FROM stores");
-      let products = await db.query("SELECT * FROM products");
-      for (const store of stores) {
-        let storeId = store.store_id;
-        let numProducts = Math.floor(Math.random() * 200) + 400;
-        products = shuffle(products);
-        for (const prod of products) {
-          let upc = prod.upc;
-          let quantity = Math.floor(Math.random() * 25);
-          await db.query("INSERT IGNORE INTO store_products (store_id, upc, quantity) VALUES (?, ?, ?)",
-          [storeId, upc, quantity]);
-        }
+
+    let stores = await db.query("select * from stores");
+    let products = await db.query("select * from products");
+    let insertStoreProducts = [];
+
+    for (const store of stores) {
+      let storeId = store.store_id;
+      products = shuffle(products);
+      for (const prod of products) {
+        let upc = prod.upc;
+        let quantity = Math.floor(Math.random() * 25);
+        insertStoreProducts.push([
+          storeId, upc, quantity
+        ])
+        
       }
-    } catch (error) {
-      console.log(error.message);
     }
-  })();
+    await db.query(
+      "INSERT IGNORE INTO store_products (store_id, upc, quantity) VALUES ?",
+      [insertStoreProducts]
+    );
+  } catch (error) {
+    console.log(error.message);
+  }
 };
 
 const seedCustomerOrders = async () => {
-  (async () => {
-    try {
-      const [rows, fields] = await pool
-        .promise()
-        .query("SELECT * FROM customer_order_products");
-      if (rows.length > 0) {
-        console.log("Customer order products data already exists.");
-        return;
-      }
-    } catch (error) {
-      console.log(error.message);
+  try {
+    const result = await db.query("select * from customer_order_products");
+    if (result.length > 0) {
+      console.log("Customer order products already exist.");
+      return;
     }
-  })();
-  (async () => {
-    try {
-      const [customers, fields1] = await pool
-        .promise()
-        .query("SELECT * FROM customers");
-      const [products, fields2] = await pool
-        .promise()
-        .query("SELECT * FROM products");
-      const [stores, fields3] = await pool
-        .promise()
-        .query("SELECT * FROM stores");
-      const [statuses, fields4] = await pool
-        .promise()
-        .query("SELECT * FROM order_status");
-      customers.forEach(async function (customer) {
-        let numOrders = Math.floor(Math.random() * 5);
-        if (numOrders > 0) {
-          let randomProducts = [];
-          randNumArray(numOrders, products.length).forEach(function (num) {
-            randomProducts.push(products[num]);
-          });
-          let randomStore = stores[Math.floor(Math.random() * stores.length)];
-          let randomStatus =
-            statuses[Math.floor(Math.random() * statuses.length)];
-          pool.query(
-            "INSERT IGNORE INTO customer_orders (customer_id, store_id, order_date, status_id) values (?, ?, (SELECT NOW() - INTERVAL FLOOR(RAND() * 14) DAY), ?)",
-            [
-              customer.customer_id,
-              randomStore.store_id,
-              randomStatus.status_id,
-            ],
-            function (err, result) {
-              if (err) throw err;
-              randomProducts.forEach(async function (prod) {
-                let quantity = Math.floor(Math.random() * 5) + 1;
 
-                // Need to verify the store has the quantity ordered and deduct this quantity from the inventory
-                pool.query(
-                  "INSERT IGNORE INTO customer_order_products (order_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
-                  [result.insertId, prod.upc, quantity, prod.price],
-                  function (err, result) {
-                    if (err) throw err;
-                  }
-                );
-              });
-            }
+    const customers = await db.query("select * from customers");
+    const products = await db.query("select * from products");
+    const stores = await db.query("select * from stores");
+    const statuses = await db.query("select * from order_status");
+
+    for (const customer of customers) {
+      let numOrders = Math.floor(Math.random() * 10);
+      if (numOrders > 0) {
+        let randomProducts = [];
+        let randNum = Math.floor(Math.random() * 10);
+        let randArray = [];
+        for (var i = 0; i < randNum; i++) {
+          randArray.push(Math.floor(Math.random() * products.length))
+        }
+
+        for (const num of randArray) {
+          randomProducts.push(products[num]);
+        }
+
+        let randomStore = stores[Math.floor(Math.random() * stores.length)];
+        let randomStatus =
+          statuses[Math.floor(Math.random() * statuses.length)];
+
+        const orderResult = await db.query(
+          "INSERT IGNORE INTO customer_orders (customer_id, store_id, order_date, status_id) values (?, ?, (SELECT NOW() - INTERVAL FLOOR(RAND() * 14) DAY), ?)",
+          [customer.customer_id, randomStore.store_id, randomStatus.status_id]
+        );
+
+        for (const prod of randomProducts) {
+          let quantity = Math.floor(Math.random() * 5) + 1;
+          await db.query(
+            "INSERT IGNORE INTO customer_order_products (order_id, upc, quantity, price) VALUES (?, ?, ?, ?)",
+            [orderResult.insertId, prod.upc, quantity, prod.price]
           );
         }
-      });
-    } catch (error) {
-      console.log(error.message);
+      }
     }
-  })();
+  } catch (error) {
+    console.log(error.message);
+  }
 };
